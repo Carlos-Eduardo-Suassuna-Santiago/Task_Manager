@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import os
@@ -55,7 +55,7 @@ async def login_user(login_data: dict):
     return response.json()
 
 @app.get("/api/users")
-async def get_users(authorization: str = None):
+async def get_users(authorization: str = Header(None)):
     headers = {"Authorization": authorization} if authorization else None
     response = await forward_request(USERS_SERVICE_URL, "/users", "GET", headers=headers)
     if response.status_code != 200:
@@ -64,7 +64,7 @@ async def get_users(authorization: str = None):
 
 # Task routes
 @app.get("/api/tasks")
-async def get_tasks(authorization: str = None):
+async def get_tasks(authorization: str = Header(None)):
     headers = {"Authorization": authorization} if authorization else None
     response = await forward_request(TASKS_SERVICE_URL, "/tasks", "GET", headers=headers)
     if response.status_code != 200:
@@ -72,7 +72,7 @@ async def get_tasks(authorization: str = None):
     return response.json()
 
 @app.post("/api/tasks")
-async def create_task(task_data: dict, authorization: str = None):
+async def create_task(task_data: dict, authorization: str = Header(None)):
     headers = {"Authorization": authorization} if authorization else None
     response = await forward_request(TASKS_SERVICE_URL, "/tasks", "POST", task_data, headers)
     if response.status_code != 200:
@@ -80,7 +80,7 @@ async def create_task(task_data: dict, authorization: str = None):
     return response.json()
 
 @app.put("/api/tasks/{task_id}")
-async def update_task(task_id: int, task_data: dict, authorization: str = None):
+async def update_task(task_id: int, task_data: dict, authorization: str = Header(None)):
     headers = {"Authorization": authorization} if authorization else None
     response = await forward_request(TASKS_SERVICE_URL, f"/tasks/{task_id}", "PUT", task_data, headers)
     if response.status_code != 200:
@@ -88,7 +88,7 @@ async def update_task(task_id: int, task_data: dict, authorization: str = None):
     return response.json()
 
 @app.delete("/api/tasks/{task_id}")
-async def delete_task(task_id: int, authorization: str = None):
+async def delete_task(task_id: int, authorization: str = Header(None)):
     headers = {"Authorization": authorization} if authorization else None
     response = await forward_request(TASKS_SERVICE_URL, f"/tasks/{task_id}", "DELETE", headers=headers)
     if response.status_code != 200:
@@ -97,7 +97,7 @@ async def delete_task(task_id: int, authorization: str = None):
 
 # Notification routes
 @app.get("/api/notifications")
-async def get_notifications(authorization: str = None):
+async def get_notifications(authorization: str = Header(None)):
     headers = {"Authorization": authorization} if authorization else None
     response = await forward_request(NOTIFICATIONS_SERVICE_URL, "/notifications", "GET", headers=headers)
     if response.status_code != 200:
@@ -105,7 +105,7 @@ async def get_notifications(authorization: str = None):
     return response.json()
 
 @app.put("/api/notifications/{notification_id}/read")
-async def mark_notification_read(notification_id: int, authorization: str = None):
+async def mark_notification_read(notification_id: int, authorization: str = Header(None)):
     headers = {"Authorization": authorization} if authorization else None
     response = await forward_request(NOTIFICATIONS_SERVICE_URL, f"/notifications/{notification_id}/read", "PUT", headers=headers)
     if response.status_code != 200:
