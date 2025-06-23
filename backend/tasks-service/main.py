@@ -4,10 +4,7 @@ import sys
 import os
 import httpx
 
-# Add shared directory to path
-#sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'shared'))
-
-from models import Task, TaskCreate, TaskUpdate, TaskStatus, TaskPriority, TaskResponse
+from models import Task, TaskCreate, TaskUpdate
 from database import Database
 from auth import verify_token
 from datetime import datetime
@@ -65,7 +62,7 @@ async def send_notification(user_id: int, title: str, message: str):
                 json={"user_id": user_id, "title": title, "message": message}
             )
         except:
-            pass  # Notification service might be down
+            pass
 
 @app.get("/health")
 async def health_check():
@@ -78,12 +75,12 @@ async def get_tasks(current_user_id: int = Depends(verify_token)):
             SELECT id, title, description, status, priority, assigned_to, 
                    due_date, created_at, updated_at, created_by
             FROM tasks 
+            WHERE created_by = ? OR assigned_to = ?
             ORDER BY created_at DESC
-        """).fetchall()
+        """, (current_user_id, current_user_id)).fetchall()
         
         tasks = []
         for row in tasks_rows:
-            # Get user info for created_by and assigned_to
             created_by_info = await get_user_info(row["created_by"])
             assigned_user_info = None
             if row["assigned_to"]:
@@ -114,29 +111,23 @@ async def create_task(task: TaskCreate, current_user_id: int = Depends(verify_to
             VALUES (?, ?, ?, ?, ?, ?)
         """, (task.title, task.description, task.priority, task.assigned_to, task.due_date, current_user_id))
         conn.commit()
-        
+
         task_id = cursor.lastrowid
-        
-        # Send notification to assigned user
+
         if task.assigned_to and task.assigned_to != current_user_id:
             await send_notification(
                 task.assigned_to,
                 "Nova tarefa atribuída",
                 f"Uma nova tarefa '{task.title}' foi atribuída para você."
             )
-        
-        # Get the created task with user info
+
         task_row = conn.execute("""
-            SELECT id, title, description, status, priority, assigned_to, 
-                   due_date, created_at, updated_at, created_by
-            FROM tasks WHERE id = ?
+            SELECT * FROM tasks WHERE id = ?
         """, (task_id,)).fetchone()
-        
+
         created_by_info = await get_user_info(task_row["created_by"])
-        assigned_user_info = None
-        if task_row["assigned_to"]:
-            assigned_user_info = await get_user_info(task_row["assigned_to"])
-        
+        assigned_user_info = await get_user_info(task_row["assigned_to"]) if task_row["assigned_to"] else None
+
         return {
             "id": task_row["id"],
             "title": task_row["title"],
@@ -155,15 +146,13 @@ async def create_task(task: TaskCreate, current_user_id: int = Depends(verify_to
 @app.put("/tasks/{task_id}")
 async def update_task(task_id: int, task_update: TaskUpdate, current_user_id: int = Depends(verify_token)):
     with db.get_connection() as conn:
-        # Check if task exists
         existing_task = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         if not existing_task:
             raise HTTPException(status_code=404, detail="Task not found")
-        
-        # Build update query
+
         update_fields = []
         update_values = []
-        
+
         if task_update.title is not None:
             update_fields.append("title = ?")
             update_values.append(task_update.title)
@@ -182,19 +171,18 @@ async def update_task(task_id: int, task_update: TaskUpdate, current_user_id: in
         if task_update.due_date is not None:
             update_fields.append("due_date = ?")
             update_values.append(task_update.due_date)
-        
+
         if update_fields:
             update_fields.append("updated_at = ?")
             update_values.append(datetime.now().isoformat())
             update_values.append(task_id)
-            
+
             conn.execute(
                 f"UPDATE tasks SET {', '.join(update_fields)} WHERE id = ?",
                 update_values
             )
             conn.commit()
-            
-            # Send notifications for status changes
+
             if task_update.status and task_update.status != existing_task["status"]:
                 if existing_task["assigned_to"]:
                     await send_notification(
@@ -202,19 +190,12 @@ async def update_task(task_id: int, task_update: TaskUpdate, current_user_id: in
                         "Status da tarefa alterado",
                         f"A tarefa '{existing_task['title']}' teve seu status alterado para {task_update.status}."
                     )
-        
-        # Return updated task
-        updated_task = conn.execute("""
-            SELECT id, title, description, status, priority, assigned_to, 
-                   due_date, created_at, updated_at, created_by
-            FROM tasks WHERE id = ?
-        """, (task_id,)).fetchone()
-        
+
+        updated_task = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+
         created_by_info = await get_user_info(updated_task["created_by"])
-        assigned_user_info = None
-        if updated_task["assigned_to"]:
-            assigned_user_info = await get_user_info(updated_task["assigned_to"])
-        
+        assigned_user_info = await get_user_info(updated_task["assigned_to"]) if updated_task["assigned_to"] else None
+
         return {
             "id": updated_task["id"],
             "title": updated_task["title"],
@@ -233,14 +214,13 @@ async def update_task(task_id: int, task_update: TaskUpdate, current_user_id: in
 @app.delete("/tasks/{task_id}")
 async def delete_task(task_id: int, current_user_id: int = Depends(verify_token)):
     with db.get_connection() as conn:
-        # Check if task exists
         task = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
-        
+
         conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
         conn.commit()
-        
+
         return {"message": "Task deleted successfully"}
 
 if __name__ == "__main__":

@@ -64,7 +64,7 @@ async def get_users(authorization: str = Header(None)):
 
 # Task routes
 @app.get("/api/tasks")
-async def get_tasks(authorization: str = Header(None)):
+async def get_tasks(authorization: str = Header(...)):
     headers = {"Authorization": authorization} if authorization else None
     response = await forward_request(TASKS_SERVICE_URL, "/tasks", "GET", headers=headers)
     if response.status_code != 200:
