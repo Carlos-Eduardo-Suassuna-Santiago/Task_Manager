@@ -70,18 +70,28 @@ async def login_user(login_data: LoginRequest):
             "SELECT id, name, email, password_hash FROM users WHERE email = ?",
             (login_data.email,)
         ).fetchone()
-        
-        if not user_row or not verify_password(login_data.password, user_row["password_hash"]):
+
+        # Usar senha dummy para evitar ataque de tempo (proteção adicional)
+        fake_hash = get_password_hash("fake_password")
+
+        if not user_row:
+            verify_password("fake_password", fake_hash)  # Dummy verification
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password"
+                detail="Email ou senha incorretos"
             )
-        
+
+        if not verify_password(login_data.password, user_row["password_hash"]):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Email ou senha incorretos"
+            )
+
         access_token_expires = timedelta(minutes=30)
         access_token = create_access_token(
             data={"sub": str(user_row["id"])}, expires_delta=access_token_expires
         )
-        
+
         return {
             "access_token": access_token,
             "token_type": "bearer",
