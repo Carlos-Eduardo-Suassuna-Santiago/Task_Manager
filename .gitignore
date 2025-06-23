@@ -289,3 +289,5 @@ pnpm-lock.yaml
 
 # Runtime files
 *.sock
+
+.bolt
