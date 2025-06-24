@@ -3,6 +3,17 @@ import { Notification } from '../types';
 import { getNotifications, markNotificationAsRead } from '../api';
 import { X, Bell, Check } from 'lucide-react';
 
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+import 'dayjs/locale/pt-br';
+
+dayjs.extend(relativeTime);
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.locale('pt-br');
+
 interface NotificationPanelProps {
   onClose: () => void;
 }
@@ -29,8 +40,8 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ onClose }) => {
   const handleMarkAsRead = async (notificationId: number) => {
     try {
       await markNotificationAsRead(notificationId);
-      setNotifications(prev => 
-        prev.map(notif => 
+      setNotifications(prev =>
+        prev.map(notif =>
           notif.id === notificationId ? { ...notif, is_read: true } : notif
         )
       );
@@ -40,29 +51,25 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ onClose }) => {
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMinutes = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffMinutes < 60) {
-      return `${diffMinutes}m atrás`;
-    } else if (diffHours < 24) {
-      return `${diffHours}h atrás`;
-    } else {
-      return `${diffDays}d atrás`;
-    }
+    return dayjs.utc(dateString).tz(dayjs.tz.guess()).fromNow();
   };
+
+  const unreadCount = notifications.filter(n => !n.is_read).length;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-end p-4 z-50">
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[80vh] overflow-hidden mt-16">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center">
-            <Bell className="h-5 w-5 text-blue-600 mr-2" />
-            <h2 className="text-xl font-semibold text-gray-900">Notificações</h2>
+          <div className="flex items-center space-x-2">
+            <Bell className="h-5 w-5 text-blue-600" />
+            <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+              Notificações
+              {unreadCount > 0 && (
+                <span className="ml-2 bg-red-600 text-white rounded-full text-xs w-5 h-5 flex items-center justify-center font-bold">
+                  {unreadCount}
+                </span>
+              )}
+            </h2>
           </div>
           <button
             onClick={onClose}
@@ -70,6 +77,14 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ onClose }) => {
           >
             <X className="h-5 w-5" />
           </button>
+        </div>
+
+        <div className="p-2 text-sm text-gray-600 border-b border-gray-200">
+          {unreadCount > 0 ? (
+            <span>Você tem <strong>{unreadCount}</strong> notificações não lidas</span>
+          ) : (
+            <span>Você não tem notificações não lidas</span>
+          )}
         </div>
 
         <div className="overflow-y-auto max-h-96">
@@ -103,7 +118,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ onClose }) => {
                         {formatDate(notification.created_at)}
                       </p>
                     </div>
-                    
+
                     {!notification.is_read && (
                       <button
                         onClick={() => handleMarkAsRead(notification.id)}
@@ -123,5 +138,4 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ onClose }) => {
     </div>
   );
 };
-
 export default NotificationPanel;

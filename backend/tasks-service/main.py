@@ -1,14 +1,12 @@
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
-import sys
 import os
 import httpx
 
-from models import Task, TaskCreate, TaskUpdate
+from models import TaskCreate, TaskUpdate
 from database import Database
 from auth import verify_token
 from datetime import datetime
-import sqlite3
 
 app = FastAPI(title="Tasks Service")
 
@@ -143,6 +141,15 @@ async def create_task(task: TaskCreate, current_user_id: int = Depends(verify_to
             "created_by_name": created_by_info["name"] if created_by_info else "Unknown"
         }
 
+def traduzir_status(status: str) -> str:
+    traducoes = {
+        "pending": "PENDENTE",
+        "in_progress": "EM PROGRESSO",
+        "completed": "CONCLUÍDA",
+        "cancelled": "CANCELADA"
+    }
+    return traducoes.get(status.lower(), status)
+
 @app.put("/tasks/{task_id}")
 async def update_task(task_id: int, task_update: TaskUpdate, current_user_id: int = Depends(verify_token)):
     with db.get_connection() as conn:
@@ -183,15 +190,20 @@ async def update_task(task_id: int, task_update: TaskUpdate, current_user_id: in
             )
             conn.commit()
 
-            if task_update.status and task_update.status != existing_task["status"]:
-                if existing_task["assigned_to"]:
+            updated_task = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+
+            if task_update.status and task_update.status.lower() != existing_task["status"].lower():
+                if updated_task["assigned_to"]:
+                    status_pt = traduzir_status(task_update.status)
+                    print(f"Enviando notificação: tarefa '{updated_task['title']}', status {status_pt}")
                     await send_notification(
-                        existing_task["assigned_to"],
+                        updated_task["assigned_to"],
                         "Status da tarefa alterado",
-                        f"A tarefa '{existing_task['title']}' teve seu status alterado para {task_update.status}."
+                        f"A tarefa '{updated_task['title']}' teve seu status alterado para {status_pt}."
                     )
 
-        updated_task = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        else:
+            updated_task = existing_task
 
         created_by_info = await get_user_info(updated_task["created_by"])
         assigned_user_info = await get_user_info(updated_task["assigned_to"]) if updated_task["assigned_to"] else None
